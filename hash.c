@@ -3,13 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 #define SIZE 100
-#define TABLESIZE 53
+#define TABLESIZE 27
 
 struct linknode
 {
 	char fileName[SIZE];
 	struct linknode *next;
-	struct linknode *prev;
 };
 
 void initializeHashTable(struct linknode **hashTable)
@@ -30,10 +29,23 @@ int calcHash(char alpha)
 	if(asciiVal >= a && asciiVal <= z)
 		hash = asciiVal - a + 1;
 	else if(asciiVal >= A && asciiVal <= Z)
-		hash = 26 + asciiVal - A + 1;
+		hash = asciiVal - A + 1;
 	else
 		hash = 0;
 	return (hash);
+}
+
+int getSize(struct linknode *hashNode)
+{
+	int count = 0;
+	struct linknode *tmp;
+	tmp = hashNode;
+	while (tmp != NULL)
+	{
+		count++;
+		tmp = tmp->next;
+	}
+	return count;
 }
 
 struct linknode* insertNode(struct linknode *hashNode, char name[])
@@ -41,39 +53,77 @@ struct linknode* insertNode(struct linknode *hashNode, char name[])
 	int i;
 	struct linknode *tmp;
 	tmp = (struct linknode *) malloc(sizeof(struct linknode));
-	for(i=0; i < sizeof(name); i++)
+	for(i=0; i < strlen(name); i++)
 		tmp -> fileName[i] = name[i];
-	if(hashNode != NULL)
-		hashNode -> prev = tmp;
 	tmp -> next = hashNode;
-	tmp -> prev = NULL;
 	hashNode = tmp;
 	return hashNode;
 }
 
 struct linknode* deleteNode(struct linknode *hashNode, char name[])
 {
-	//yet to be coded
-}
-
-struct linknode* searchNode(struct linknode *hashNode, char name[])
-{
-	struct linknode *item, *tmp;
-	short int flag = 0;
+	int i;
+	struct linknode *tmp, *pre;
 	tmp = hashNode;
-	item = NULL;
-	if (tmp == NULL)
-		item = NULL;
+	short int flag = 0;
+	pre = NULL;
+	if(tmp == NULL)
+		return NULL;
+	else if(strcmp(name, tmp->fileName) == 0)
+	{
+		hashNode = tmp->next;
+		free(tmp);
+		return hashNode;
+	}
 	else
 	{
 		while(tmp != NULL && flag == 0)
 		{
 			if (strcmp(name, tmp->fileName) == 0)
-				item = tmp;
+			{
+				pre->next = tmp->next;
+				free(tmp);
+				flag = 1;
+			}
+			pre = tmp;
 			tmp = tmp->next;
 		}
+
+		return hashNode;
 	}
-	return(item);
+}
+
+struct linknode** searchNode(struct linknode *hashNode, char name[])
+{
+	struct linknode **item, *tmp;
+	int i, x=0, count=0;
+	tmp = hashNode;
+	char namestr[strlen(name)];
+	while(tmp != NULL)
+	{
+		for(i=0; name[i] != '\0'; i++)
+			namestr[i] = tmp->fileName[i];
+		namestr[i] = '\0';
+		if(strcmp(name, namestr) == 0)
+			count++;
+		tmp = tmp->next;
+	}
+
+	item = (struct linknode **) malloc(sizeof(struct linknode) * (count+1));		//dereference item first before dereferencing *item in the next line
+	*item = (struct linknode *) malloc(sizeof(struct linknode) * (count+1));
+	tmp = hashNode;
+
+	while(tmp != NULL)
+	{
+		for(i=0; name[i] != '\0'; i++)
+			namestr[i] = tmp->fileName[i];
+		namestr[i] = '\0';
+		if(strcmp(name, namestr) == 0)
+			item[x++] = tmp;
+		tmp = tmp->next;
+	}
+	item[x] = NULL;
+	return (item);
 }
 
 void showList(struct linknode *hashNode)
@@ -110,19 +160,23 @@ void deleteFile(char name[], struct linknode **hashTable)
 
 void searchFile(char name[], struct linknode **hashTable)
 {
-	int hash;
+	int hash, size, i=0, flag = 0;
 	char init;
-	struct linknode *temp;
+	struct linknode **temp;
+	
 	init = name[0];
 	hash = calcHash(init);
+	size = getSize(hashTable[hash]);
+
 	temp = searchNode(hashTable[hash], name);
-	if (temp == NULL)
-		printf("\nFile not found!\n");
-	else
+	while(temp[i] != NULL)
 	{
-		printf("\nFile found: %s", temp -> fileName);
-		printf("\nFile found at table entry %d\n", hash);
+		printf("\nFile found: %s\n", temp[i] -> fileName);
+		i++;
+		flag = 1;
 	}
+	if (flag == 0)
+		printf("\nFile not found!\n");
 }
 
 void displayTable(struct linknode **hashTable)
@@ -136,6 +190,58 @@ void displayTable(struct linknode **hashTable)
 	}
 }
 
+void writeToDisk(struct linknode **hashTable)
+{
+	FILE *ht, *meta;
+	int rowcounter, nodecounter, size;
+	struct linknode temp;
+	ht = fopen("./hashtable.bin", "wb");
+	meta = fopen("./metadata.bin", "wb");
+	if(!ht || !meta)
+	{
+		printf("Error: Unable to open file..");
+	}
+	for (rowcounter = 0; rowcounter < TABLESIZE; rowcounter++)
+	{
+		size = getSize(hashTable[rowcounter]);
+		for(nodecounter = 0; nodecounter < size; nodecounter++)
+		{
+			temp = hashTable[rowcounter][nodecounter];
+			fwrite(&temp, sizeof(struct linknode), 1, ht);
+			fwrite(&size, sizeof(int), 1, meta);
+		}
+
+	}
+	fclose(ht);
+	fclose(meta);
+}
+
+void readFromDisk(struct linknode **hashTable)
+{
+	FILE *ht, *meta;
+	int rowcounter, nodecounter, size;
+	struct linknode temp;
+	ht = fopen("./hashtable.bin", "rb");
+	meta = fopen("./metadata.bin", "rb");
+	if(!ht || !meta)
+	{
+		printf("Error: Unable to open file..");
+	}
+	for (rowcounter = 0; rowcounter < TABLESIZE; rowcounter++)
+	{
+		fread(&size, sizeof(int), 1, meta);
+		for(nodecounter = 0; nodecounter < size; nodecounter++)
+		{
+			fread(&temp, sizeof(struct linknode), 1, ht);
+			hashTable[rowcounter][nodecounter] = temp;
+			
+		}
+
+	}
+	fclose(ht);
+	fclose(meta);
+}
+
 int main()
 {
 	int choice;
@@ -146,11 +252,13 @@ int main()
 	
 	while(ans == 'y')
 	{
-		printf("1. Create file\n");
+		printf("\n1. Create file\n");
 		printf("2. Delete File\n");
 		printf("3. Search File\n");
 		printf("4. Display Table\n");
 		printf("5. Exit\n");
+		printf("6. Write to disk\n");
+		printf("7. Read from disk\n");
 		printf("\nEnter choice: ");
 		scanf("%d", &choice);
 		switch(choice)
@@ -179,6 +287,14 @@ int main()
 
 			case 5:
 				exit(0);
+
+			case 6:
+				writeToDisk(hashTable);
+				break;
+
+			case 7:
+				readFromDisk(hashTable);
+				break;
 		}
 	}
 	return (0);
