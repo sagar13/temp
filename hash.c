@@ -166,7 +166,6 @@ void searchFile(char name[], struct linknode **hashTable)
 	
 	init = name[0];
 	hash = calcHash(init);
-	size = getSize(hashTable[hash]);
 
 	temp = searchNode(hashTable[hash], name);
 	while(temp[i] != NULL)
@@ -192,54 +191,55 @@ void displayTable(struct linknode **hashTable)
 
 void writeToDisk(struct linknode **hashTable)
 {
-	FILE *ht, *meta;
-	int rowcounter, nodecounter, size;
-	struct linknode temp;
-	ht = fopen("./hashtable.bin", "wb");
-	meta = fopen("./metadata.bin", "wb");
-	if(!ht || !meta)
+	FILE *writefiles;
+	int i, count = 0;
+	struct linknode *temp;
+	char *file;
+	writefiles = fopen("./hashtable.bin", "wb");
+	if(!writefiles)
 	{
 		printf("Error: Unable to open file..");
 	}
-	for (rowcounter = 0; rowcounter < TABLESIZE; rowcounter++)
-	{
-		size = getSize(hashTable[rowcounter]);
-		for(nodecounter = 0; nodecounter < size; nodecounter++)
-		{
-			temp = hashTable[rowcounter][nodecounter];
-			fwrite(&temp, sizeof(struct linknode), 1, ht);
-			fwrite(&size, sizeof(int), 1, meta);
-		}
 
+	fseek(writefiles, sizeof(int), SEEK_CUR);
+
+	for(i=0; i < TABLESIZE; i++)
+	{
+		temp = hashTable[i];
+		while(temp != NULL)
+		{
+			file = temp->fileName;
+			fwrite(file, SIZE, 1, writefiles);
+			temp = temp->next;
+			count++;
+		}
 	}
-	fclose(ht);
-	fclose(meta);
+
+	rewind(writefiles);
+	fwrite(&count, sizeof(int), 1, writefiles);
+
+	fclose(writefiles);
 }
 
 void readFromDisk(struct linknode **hashTable)
 {
-	FILE *ht, *meta;
-	int rowcounter, nodecounter, size;
-	struct linknode temp;
-	ht = fopen("./hashtable.bin", "rb");
-	meta = fopen("./metadata.bin", "rb");
-	if(!ht || !meta)
+	FILE *readfiles;
+	int i = 0, count = 0;
+	struct linknode *temp;
+	char file[SIZE];
+	readfiles = fopen("./hashtable.bin", "rb");
+	if(!readfiles)
 	{
 		printf("Error: Unable to open file..");
 	}
-	for (rowcounter = 0; rowcounter < TABLESIZE; rowcounter++)
-	{
-		fread(&size, sizeof(int), 1, meta);
-		for(nodecounter = 0; nodecounter < size; nodecounter++)
+	fread(&count, sizeof(int), 1, readfiles);
+		while(i != count)
 		{
-			fread(&temp, sizeof(struct linknode), 1, ht);
-			hashTable[rowcounter][nodecounter] = temp;
-			
+			fread(file, SIZE, 1, readfiles);
+			insertFile(file, hashTable);
+			i++;
 		}
-
-	}
-	fclose(ht);
-	fclose(meta);
+	fclose(readfiles);
 }
 
 int main()
